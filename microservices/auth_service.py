@@ -5,7 +5,6 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
-import httpx
 import os
 import time
 import random
@@ -20,8 +19,10 @@ resource = Resource(attributes={
 trace.set_tracer_provider(TracerProvider(resource=resource))
 tracer = trace.get_tracer(__name__)
 
-otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
-span_processor = BatchSpanProcessor(OTLPSpanExporter(endpoint=f"{otlp_endpoint}/v1/traces"))
+otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://collector:4318")
+span_processor = BatchSpanProcessor(
+    OTLPSpanExporter(endpoint=f"{otlp_endpoint}/v1/traces")
+)
 trace.get_tracer_provider().add_span_processor(span_processor)
 
 app = FastAPI()
@@ -33,12 +34,24 @@ async def health():
 
 @app.post("/login")
 async def login(user_id: str):
-    with tracer.start_as_current_span("user.login"):
-        if random.random() < 0.1:
-            raise HTTPException(500, "Auth failure")
+    with tracer.start_as_current_span("user.login") as span:
+        span.set_attribute("user.id", user_id)
+        
+        # Simulate authentication delay
         time.sleep(random.uniform(0.05, 0.3))
-        return {"user_id": user_id, "token": "jwt-token"}
+        
+        # Random auth failures
+        if random.random() < 0.1:
+            span.set_attribute("error", True)
+            span.set_attribute("error.type", "AuthenticationError")
+            raise HTTPException(500, "Auth failure")
+        
+        span.set_attribute("auth.success", True)
+        return {"user_id": user_id, "token": f"jwt-token-{user_id}"}
 
 @app.get("/error")
 async def force_error():
-    raise HTTPException(500, "Forced error for testing")
+    with tracer.start_as_current_span("forced.error") as span:
+        span.set_attribute("error", True)
+        span.set_attribute("test", True)
+        raise HTTPException(500, "Forced error for testing")

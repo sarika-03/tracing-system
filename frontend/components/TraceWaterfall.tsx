@@ -5,8 +5,8 @@ interface Span {
   spanId: string
   parentSpanId?: string | null
   name: string
-  startTime: number // in microseconds
-  duration: number  // in microseconds
+  startTimeUnixNano: number
+  endTimeUnixNano: number
   serviceName: string
   statusCode: string
 }
@@ -25,38 +25,44 @@ function getColor(serviceName: string) {
   for (let i = 0; i < serviceName.length; i++) {
     hash = serviceName.charCodeAt(i) + ((hash << 5) - hash)
   }
-  const index = Math.abs(hash) % COLORS.length
-  return COLORS[index]
+  return COLORS[Math.abs(hash) % COLORS.length]
 }
 
 export default function TraceWaterfall({ spans }: Props) {
   if (!spans || spans.length === 0) return <p>No span data</p>
 
-  // Find start time of trace
-  const minStart = Math.min(...spans.map(s => s.startTime))
-  const maxEnd = Math.max(...spans.map(s => s.startTime + s.duration))
+  const minStart = Math.min(...spans.map(s => s.startTimeUnixNano))
+  const maxEnd = Math.max(...spans.map(s => s.endTimeUnixNano))
   const totalDuration = maxEnd - minStart
 
   return (
     <div className="space-y-2">
       {spans.map((span) => {
-        const leftPercent = ((span.startTime - minStart) / totalDuration) * 100
-        const widthPercent = (span.duration / totalDuration) * 100
+        const leftPercent = ((span.startTimeUnixNano - minStart) / totalDuration) * 100
+        const widthPercent = ((span.endTimeUnixNano - span.startTimeUnixNano) / totalDuration) * 100
         const color = getColor(span.serviceName)
+        const spanDuration = (span.endTimeUnixNano - span.startTimeUnixNano) / 1_000_000
 
         return (
-          <div key={span.spanId} className="relative h-8 bg-gray-100 rounded">
+          <div
+            key={span.spanId}
+            className="relative h-8 bg-gray-100 rounded group"
+            title={`${span.name} - ${span.serviceName} - ${spanDuration.toFixed(2)}ms`}
+          >
             <span
-              className="absolute h-8 rounded"
+              className="absolute h-8 rounded opacity-80 hover:opacity-100 transition"
               style={{
                 left: `${leftPercent}%`,
                 width: `${widthPercent}%`,
                 backgroundColor: color,
+                border: span.statusCode === 'ERROR' ? '2px solid red' : 'none'
               }}
-              title={`${span.name} (${span.serviceName}) ${span.duration / 1000} ms`}
             />
-            <div className="absolute left-1 top-1 text-xs font-mono text-white">
+            <div className="absolute left-1 top-1 text-xs font-mono text-white truncate">
               {span.name}
+            </div>
+            <div className="absolute right-1 top-1 text-xs text-white font-semibold">
+              {spanDuration.toFixed(2)}ms
             </div>
           </div>
         )

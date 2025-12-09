@@ -18,8 +18,11 @@ resource = Resource(attributes={
 trace.set_tracer_provider(TracerProvider(resource=resource))
 tracer = trace.get_tracer(__name__)
 
-otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
-trace.get_tracer_provider().add_span_processor(BatchSpanProcessor(OTLPSpanExporter(endpoint=f"{otlp_endpoint}/v1/traces")))
+otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://collector:4318")
+span_processor = BatchSpanProcessor(
+    OTLPSpanExporter(endpoint=f"{otlp_endpoint}/v1/traces")
+)
+trace.get_tracer_provider().add_span_processor(span_processor)
 
 app = FastAPI()
 FastAPIInstrumentor.instrument_app(app)
@@ -30,13 +33,31 @@ async def health():
 
 @app.post("/check")
 async def check_inventory(order_id: str):
-    with tracer.start_as_current_span("inventory.check"):
+    with tracer.start_as_current_span("inventory.check") as span:
+        span.set_attribute("order.id", order_id)
+        
+        # Simulate inventory check
         time.sleep(random.uniform(0.05, 0.2))
-        # Simulate random inventory issues
+        
+        # Random inventory issues
         if random.random() < 0.15:
+            span.set_attribute("error", True)
+            span.set_attribute("error.type", "InventoryShortage")
             raise HTTPException(409, "Inventory shortage")
-        return {"order_id": order_id, "available": True}
+        
+        available_qty = random.randint(1, 100)
+        span.set_attribute("inventory.available", available_qty)
+        span.set_attribute("inventory.status", "available")
+        
+        return {
+            "order_id": order_id, 
+            "available": True,
+            "quantity": available_qty
+        }
 
 @app.get("/error")
 async def force_error():
-    raise HTTPException(500, "Forced error for testing")
+    with tracer.start_as_current_span("forced.error") as span:
+        span.set_attribute("error", True)
+        span.set_attribute("test", True)
+        raise HTTPException(500, "Forced error for testing")
