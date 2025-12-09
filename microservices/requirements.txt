@@ -1,0 +1,14 @@
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+httpx==0.25.2
+
+opentelemetry-api==1.22.0
+opentelemetry-sdk==1.22.0
+opentelemetry-exporter-otlp-proto-http==1.22.0
+
+# IMPORTANT: sab instrumentation 0.43b0 pe rakho
+opentelemetry-instrumentation==0.43b0
+opentelemetry-instrumentation-fastapi==0.43b0
+opentelemetry-instrumentation-asgi==0.43b0
+
+pydantic==2.5.0

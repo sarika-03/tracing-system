@@ -1,0 +1,15 @@
+head_sample_rate: 0.1
+
+tail_sampling:
+  latency_threshold_ms: 300
+  include_errors: true
+
+services:
+  - name: auth-service
+    priority: 1
+  - name: order-service
+    priority: 1
+  - name: payment-service
+    priority: 1
+  - name: inventory-service
+    priority: 1
